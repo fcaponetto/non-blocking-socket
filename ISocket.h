@@ -51,107 +51,116 @@
 
 namespace sock
 {
+template<typename S, typename R = S>
+class ISocket 
+{
+public:
 
-    template<typename S, typename R = S>
-    class ISocket {
+    typedef std::unique_ptr<ISocket> Ptr;
 
-    public:
+    virtual void sock_init() = 0;
 
-        typedef std::unique_ptr<ISocket> Ptr;
+    virtual ~ISocket() {
+#ifdef _WIN32
+        closesocket(socket_);
+#elif __linux__
+        close(socket_);
+#endif
+    }
 
-        virtual void sock_init() = 0;
+    /**
+     * Bind the socket for incoming data
+     * @param address Local address
+     * @param port Local port
+     */
+    void sock_bind(const char *address, uint16_t port) {
+        /* zero out structure */
+        memset((char *) (&local_), 0, sizeof(local_));
 
-        virtual ~ISocket() {
+        /* initialize address to bind */
+        local_.sin_family = AF_INET;
+        local_.sin_port = htons(port);
+        local_.sin_addr.s_addr = inet_addr(address);
+
+        /* bind socket to address and port */
+        if (bind(socket_, (struct sockaddr *) (&local_), sizeof(local_)) != NO_ERROR) {
+#ifdef _WIN32
+            closesocket(socket_);
+#elif __linux__
+//			consoleLog->error("bind failed with error: {}", errno);
+            close(socket_);
+#endif
+            throw std::runtime_error("bind() failed");
+        }
+    }
+
+    /**
+     * Connect to the destination socket
+     * @param address Destination address
+     * @param port Destination port
+     */
+    void sock_connect(const char *address, uint16_t port) {
+        memset((char *) &remote_, 0, sizeof(remote_));
+        remote_.sin_family = AF_INET;
+        remote_.sin_port = htons(port);
+        remote_.sin_addr.s_addr = inet_addr(address);
+
+        if (connect(socket_, (struct sockaddr *) (&remote_), sizeof(remote_)) < 0) {
 #ifdef _WIN32
             closesocket(socket_);
 #elif __linux__
             close(socket_);
 #endif
+            throw std::runtime_error("connect() failed");
         }
+    }
 
-        /**
-     * Bind the socket for incoming data
-     * @param address Local address
-     * @param port Local port
+    /**
+     * Send bytes to connected socket
+     * @param tx structure to be sent
+     * @param size number of bytes to copy into tx
      */
-        void sock_bind(const char *address, uint16_t port) {
-            /* zero out structure */
-            memset((char *) (&local_), 0, sizeof(local_));
-
-            /* initialize address to bind */
-            local_.sin_family = AF_INET;
-            local_.sin_port = htons(port);
-            local_.sin_addr.s_addr = inet_addr(address);
-
-            /* bind socket to address and port */
-            if (bind(socket_, (struct sockaddr *) (&local_), sizeof(local_)) != NO_ERROR) {
-#ifdef _WIN32
-                closesocket(socket_);
-#elif __linux__
-//			consoleLog->error("bind failed with error: {}", errno);
-                close(socket_);
-#endif
-                throw std::runtime_error("bind() failed");
-            }
+    template<typename Sock_Tx_Types>
+    int sock_send(Sock_Tx_Types &tx, const size_t size = 0) {
+        if (size) {
+            size_sender_ = size;
         }
 
-        /**
-         * Connect to the destination socket
-         * @param address Destination address
-         * @param port Destination port
-         */
-        void sock_connect(const char *address, uint16_t port) {
-            memset((char *) &remote_, 0, sizeof(remote_));
-            remote_.sin_family = AF_INET;
-            remote_.sin_port = htons(port);
-            remote_.sin_addr.s_addr = inet_addr(address);
+        memcpy(buffer_sender_.get(), &tx, size_sender_);
 
-            if (connect(socket_, (struct sockaddr *) (&remote_), sizeof(remote_)) < 0) {
-#ifdef _WIN32
-                closesocket(socket_);
-#elif __linux__
-                close(socket_);
-#endif
-                throw std::runtime_error("connect() failed");
-            }
+        int bytes =
+                send(socket_,                // Connected socket
+                        buffer_sender_.get(),    // Data buffer
+                        size_sender_,            // Length of data
+                        0);
+
+        return bytes;
+    }
+
+    /**
+     * Receive bytes to connected socket
+     * @param rx structure to be filled
+     * @param size number of bytes to copy into rx
+     */
+    template<typename Sock_Rx_Types>
+    int sock_receive(Sock_Rx_Types &rx, size_t size = 0) {
+
+        if (size) {
+            size_receiver_ = size;
         }
 
-        template<typename Sock_Tx_Types>
-        int sock_send(Sock_Tx_Types &tx, const size_t size = 0) {
-            if (size) {
-                size_sender_ = size;
-            }
-
-            memcpy(buffer_sender_.get(), &tx, size_sender_);
-
-            int bytes =
-                    send(socket_,                // Connected socket
-                            buffer_sender_.get(),    // Data buffer
-                            size_sender_,            // Length of data
-                            0);
-
-            return bytes;
-        }
-
-        template<typename Sock_Rx_Types>
-        int sock_receive(Sock_Rx_Types &rx, size_t size = 0) {
-
-            if (size) {
-                size_receiver_ = size;
-            }
-
 #ifdef _WIN32
-            int si_len = sizeof(si_recv);
+        int si_len = sizeof(si_recv);
 #elif __linux__
-            socklen_t si_len = sizeof(si_recv);
+        socklen_t si_len = sizeof(si_recv);
 #endif
 
-            /* If there is nothing in the buffer, EAGAIN will be raised. It might happen */
-            ssize_t bytes =
-                    recv(socket_,           // Bound socket
-                            buffer_receiver_.get(), // Data buffer
-                            size_receiver_,         // Length of data
-                            0);
+        /* If there is nothing in the buffer, EAGAIN will be raised. It might happen */
+        ssize_t bytes =
+                recv(socket_,           // Bound socket
+                        buffer_receiver_.get(), // Data buffer
+                        size_receiver_,         // Length of data
+                        0);
 
 //        if (errno == EAGAIN)
 //        {
@@ -159,59 +168,59 @@ namespace sock
 //        }
 //        perror("errno: ");
 
-            if (bytes > 0)
-                memcpy(&rx, buffer_receiver_.get(), size_receiver_);
+        if (bytes > 0)
+            memcpy(&rx, buffer_receiver_.get(), size_receiver_);
 
-            return bytes;
-        }
+        return bytes;
+    }
 
-        void set_recv_buf(size_t sendBuff)
+    void set_recv_buf(size_t sendBuff)
+    {
+        socklen_t optlen = sizeof(int);
+        size_t sendbuff;
+
+        if ( setsockopt( this->socket_, SOL_SOCKET, SO_RCVBUF, &sendbuff, sizeof(sendbuff) ) == SOCKET_ERROR )
         {
-            socklen_t optlen = sizeof(int);
-            size_t sendbuff;
+            throw std::runtime_error("error setsockopt()");
 
-            if ( setsockopt( this->socket_, SOL_SOCKET, SO_RCVBUF, &sendbuff, sizeof(sendbuff) ) == SOCKET_ERROR )
-            {
-                throw std::runtime_error("error setsockopt()");
-
-            }
-
-            // Get buffer size
-            auto res = getsockopt(this->socket_, SOL_SOCKET, SO_RCVBUF, &sendbuff, &optlen);
-
-            if(res == -1)
-                throw std::runtime_error("error getsockopt()");
-            else
-                printf("revc buffer size = %d\n", sendbuff);
         }
 
-    protected:
+        // Get buffer size
+        auto res = getsockopt(this->socket_, SOL_SOCKET, SO_RCVBUF, &sendbuff, &optlen);
 
-        ISocket()
-        {
-            size_receiver_ = sizeof(R);
-            buffer_receiver_ = std::make_unique<char[]>(size_receiver_);
-            // if(S != R)
-            // {
-            size_sender_ = sizeof(S);
-            buffer_sender_ = std::make_unique<char[]>(size_sender_);
-            // }
-        }
+        if(res == -1)
+            throw std::runtime_error("error getsockopt()");
+        else
+            printf("revc buffer size = %d\n", sendbuff);
+    }
 
-        std::unique_ptr<char[]> buffer_sender_;
-        std::unique_ptr<char[]> buffer_receiver_;
+protected:
 
-        size_t size_receiver_;
+    ISocket()
+    {
+        size_receiver_ = sizeof(R);
+        buffer_receiver_ = std::make_unique<char[]>(size_receiver_);
+        // if(S != R)
+        // {
+        size_sender_ = sizeof(S);
+        buffer_sender_ = std::make_unique<char[]>(size_sender_);
+        // }
+    }
 
-        size_t size_sender_;
+    std::unique_ptr<char[]> buffer_sender_;
+    std::unique_ptr<char[]> buffer_receiver_;
+
+    size_t size_receiver_;
+
+    size_t size_sender_;
 
 #ifdef _WIN32
-        WSADATA wsaData;
+    WSADATA wsaData;
 #endif
 
-        int socket_;
-        struct sockaddr_in local_, remote_, si_recv;
+    SOCKET socket_;
+    struct sockaddr_in local_, remote_, si_recv;
 
-    };
+};
 }
 #endif //_ISOCKET_H_
