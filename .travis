@@ -1,0 +1,16 @@
+ 
+#travis configuration for coverage testing
+language: cpp
+
+#sudo: false # only for faster builds
+
+# Compiler selection
+compiler:
+  - clang
+  - gcc
+
+# Build steps
+script: 
+  - cd ${TRAVIS_BUILD_DIR}/example
+  - cmake ..
+  - make
