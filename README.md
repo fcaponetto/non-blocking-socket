@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/fcaponetto/non-blocking-socket.svg?branch=master)](https://travis-ci.org/fcaponetto/non-blocking-socket)
+
 # Non-Blocking Socket
 A C++ library that allows you to create non-blocking sockets (UDP /TCP) for Linux or Windows. Headers only.
 
