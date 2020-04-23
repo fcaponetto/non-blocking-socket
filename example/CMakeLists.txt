@@ -6,4 +6,4 @@ set (CMAKE_CXX_STANDARD 14)
 
 include_directories(../include/non-blocking-socket)
 
-add_executable(udpexample main.cpp)
+add_executable(udpexample udp/main.cpp)
