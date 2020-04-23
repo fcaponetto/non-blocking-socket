@@ -4,6 +4,6 @@ project(example)
 
 set (CMAKE_CXX_STANDARD 14)
 
-include_directories(..)
+include_directories(../include/non-blocking-socket)
 
-add_executable(example main.cpp)
+add_executable(udpexample main.cpp)

@@ -12,5 +12,7 @@ compiler:
 # Build steps
 script: 
   - cd ${TRAVIS_BUILD_DIR}/example
-  - cmake .
+  - mkdir build
+  - cd build
+  - cmake ..
   - make
