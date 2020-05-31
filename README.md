@@ -9,7 +9,7 @@ This is a fairly low-level C++ wrapper around the Berkeley sockets library using
 ## Example
 
 **Packet definition**
-```
+```C++
 namespace packet
 {
     typedef struct
@@ -28,7 +28,7 @@ namespace packet
 
 **Send and/or receive data**
 
-```
+```C++
 #include <UdpSocket.h>
 #include "Packet.h"
 #include <iostream>
